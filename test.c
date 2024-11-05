@@ -4,6 +4,7 @@
 # include <stdlib.h>
 # include <string.h>
 # include <unistd.h>
+# include <ctype.h>
 
 # ifndef BUFFER_SIZE
 #  define BUFFER_SIZE 10
@@ -31,12 +32,12 @@ size_t	str_len(const char *s)
 char	*str_chr(const char *s, int c)
 {
 	int	i;
+	i = 0;
 
 	if (s == NULL)
 	{
 		return (NULL);
 	}
-	i = 0;
 	while (s[i] != '\0')
 	{
 		if (s[i] == (unsigned char)c)
@@ -214,116 +215,135 @@ char	*get_next_line(int fd)
 }
 
 
-// // Helper function to create strings for testing around BUFFER_SIZE
-// char *create_test_string(const char *encoding) {
-//     int len = 0;
-//     for (int i = 0; encoding[i] != '\0'; i++) {
-//         if (encoding[i] >= '0' && encoding[i] <= '9') {
-//             len += encoding[i] - '0';
-//         } else if (encoding[i] == '\n') {
-//             len++;
-//         }
-//     }
+// Helper function to create strings for testing around BUFFER_SIZE
+char *create_test_string(const char *encoding) {
+    int len = 0;
+    for (int i = 0; encoding[i] != '\0'; ) {
+        if (isdigit(encoding[i])) {
+            int num = 0;
+            while (isdigit(encoding[i])) { // Handle multi-digit numbers
+                num = num * 10 + (encoding[i] - '0');
+                i++;
+            }
+            len += num;
+        } else if (encoding[i] == '\n') {
+            len++;
+            i++;
+        } else {
+            i++; // Skip any unexpected characters
+        }
+    }
 
-//     char *content = malloc(len + 1);
-//     if (!content) return NULL;
+    char *content = malloc(len + 1);
+    if (!content) return NULL;
 
-//     int offset = 0;
-//     for (int i = 0; encoding[i] != '\0'; i++) {
-//         if (encoding[i] >= '0' && encoding[i] <= '9') {
-//             int count = encoding[i] - '0';
-//             for (int j = 0; j < count; j++) {
-//                 content[offset] = (offset % 26) + 'a';
-//                 offset++;
-//             }
-//         } else if (encoding[i] == '\n') {
-//             content[offset] = '\n';
-//             offset++;
-//         }
-//     }
-//     content[offset] = '\0';
-//     return content;
-// }
+    int offset = 0;
+    for (int i = 0; encoding[i] != '\0'; ) {
+        if (isdigit(encoding[i])) {
+            int count = 0;
+            while (isdigit(encoding[i])) { // Handle multi-digit numbers
+                count = count * 10 + (encoding[i] - '0');
+                i++;
+            }
+            for (int j = 0; j < count; j++) {
+                content[offset] = (offset % 26) + 'a';
+                offset++;
+            }
+        } else if (encoding[i] == '\n') {
+            content[offset] = '\n';
+            offset++;
+            i++;
+        } else {
+            i++; // Skip any unexpected characters
+        }
+    }
+    content[offset] = '\0';
+    return content;
+}
 
-// // Function to perform the limit tests
-// void test_limit(const char *encoding) {
-//     char *content = create_test_string(encoding);
-//     if (!content) {
-//         printf("Failed to create test string for encoding: %s\n", encoding);
-//         return;
-//     }
 
-//     // Print generated content for reference
-//     printf("Generated content for encoding '%s':\n%s\n", encoding, content);
 
-//     // Write content to temporary file
-//     FILE *file = fopen("limits_test.txt", "w");
-//     if (!file) {
-//         perror("Failed to open test file");
-//         free(content);
-//         return;
-//     }
-//     fprintf(file, "%s", content);
-//     fclose(file);
 
-//     int fd = open("limits_test.txt", O_RDONLY);
-//     if (fd < 0) {
-//         perror("Failed to open test file for reading");
-//         free(content);
-//         return;
-//     }
 
-//     printf("\nTesting encoding: %s\n", encoding);
-//     char *line;
-//     int line_num = 1;
-//     int passed = 1;
+// Function to perform the limit tests
+void test_limit(const char *encoding) {
+    char *content = create_test_string(encoding);
+    if (!content) {
+        printf("Failed to create test string for encoding: %s\n", encoding);
+        return;
+    }
 
-//     // Expected result is based on the encoding - print the lines read
-//     int offset = 0;
-//     while ((line = get_next_line(fd)) != NULL) {
-//         int expected_len = 0;
-//         while (content[offset + expected_len] && content[offset + expected_len] != '\n')
-//             expected_len++;
-//         expected_len += (content[offset + expected_len] == '\n'); // Include newline if present
+    // Print generated content for reference
+    printf("Generated content for encoding '%s':\n%s\n", encoding, content);
 
-//         char *expected = strndup(content + offset, expected_len);
-//         offset += expected_len;
+    // Write content to temporary file
+    FILE *file = fopen("limits_test.txt", "w");
+    if (!file) {
+        perror("Failed to open test file");
+        free(content);
+        return;
+    }
+    fprintf(file, "%s", content);
+    fclose(file);
 
-//         // Print the actual vs. expected output for comparison
-//         printf("Line %d: Expected: \"%s\", Got: \"%s\"\n", line_num++, expected, line);
+    int fd = open("limits_test.txt", O_RDONLY);
+    if (fd < 0) {
+        perror("Failed to open test file for reading");
+        free(content);
+        return;
+    }
+
+    printf("\nTesting encoding: %s\n", encoding);
+    char *line;
+    int line_num = 1;
+    int passed = 1;
+
+    // Expected result is based on the encoding - print the lines read
+    int offset = 0;
+    while ((line = get_next_line(fd)) != NULL) {
+        int expected_len = 0;
+        while (content[offset + expected_len] && content[offset + expected_len] != '\n')
+            expected_len++;
+        expected_len += (content[offset + expected_len] == '\n'); // Include newline if present
+
+        char *expected = strndup(content + offset, expected_len);
+        offset += expected_len;
+
+        // Print the actual vs. expected output for comparison
+        printf("Line %d: Expected: \"%s\", Got: \"%s\"\n", line_num++, expected, line);
         
-//         if (strcmp(expected, line) != 0) {
-//             passed = 0;
-//         }
+        if (strcmp(expected, line) != 0) {
+            passed = 0;
+        }
 
-//         free(line);
-//         free(expected);
-//     }
-//     close(fd);
-//     free(content);
-//     remove("limits_test.txt"); // Clean up temporary file
+        free(line);
+        free(expected);
+    }
+    close(fd);
+    free(content);
+    remove("limits_test.txt"); // Clean up temporary file
 
-//     // Print pass/fail result
-//     if (passed) {
-//         printf("Test for encoding '%s' PASSED\n", encoding);
-//     } else {
-//         printf("Test for encoding '%s' FAILED\n", encoding);
-//     }
-// }
+    // Print pass/fail result
+    if (passed) {
+        printf("Test for encoding '%s' PASSED\n", encoding);
+    } else {
+        printf("Test for encoding '%s' FAILED\n", encoding);
+    }
+}
 
-// int main(void) {
-//     // Define encoded test cases around BUFFER_SIZE boundary
-//     const char *tests[] = {
-//         "9", "9\n", "10", "10\n", "11", "11\n",
-//         "19", "19\n", "20", "20\n", "21", "21\n",
-//         "9\n9\n", "9\n10", "9\n10\n",
-//         "10\n8\n", "10\n9", "10\n9\n"
-//     };
+int main(void) {
+    // Define encoded test cases around BUFFER_SIZE boundary
+    const char *tests[] = {
+        "9", "9\n", "10", "10\n", "11", "11\n",
+        "19", "19\n", "20", "20\n", "21", "21\n",
+        "9\n9\n", "9\n10", "9\n10\n",
+        "10\n8\n", "10\n9", "10\n9\n"
+    };
 
-//     for (int i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
-//         test_limit(tests[i]);
-//         printf("\n");
-//     }
+    for (int i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
+        test_limit(tests[i]);
+        printf("\n");
+    }
 
-//     return 0;
-// }
+    return 0;
+}
